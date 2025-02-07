@@ -29,9 +29,9 @@ class NaiveBayes:
             delta (float): Smoothing parameter for Laplace smoothing.
         """
         # TODO: Estimate class priors and conditional probabilities of the bag of words 
-        self.class_priors = None
-        self.vocab_size = None # Shape of the probability tensors, useful for predictions and conditional probabilities
-        self.conditional_probabilities = None
+        self.class_priors = self.estimate_class_priors(labels)
+        self.vocab_size = len(features[0]) # Shape of the probability tensors, useful for predictions and conditional probabilities
+        self.conditional_probabilities = self.estimate_conditional_probabilities(features,labels,delta)
         return
 
     def estimate_class_priors(self, labels: torch.Tensor) -> Dict[int, torch.Tensor]:
@@ -45,7 +45,11 @@ class NaiveBayes:
             Dict[int, torch.Tensor]: A dictionary mapping class labels to their estimated prior probabilities.
         """
         # TODO: Count number of samples for each output class and divide by total of samples
-        class_priors: Dict[int, torch.Tensor] = None
+        class_priors: Dict[int, torch.Tensor] = {}
+        classes : torch.Tensor = labels.unique()
+        for label in classes:
+            prior : float = (labels == int(label)).sum().float() / labels.shape[0]
+            class_priors[int(label)] = torch.Tensor(prior)
         return class_priors
 
     def estimate_conditional_probabilities(
@@ -63,7 +67,17 @@ class NaiveBayes:
             Dict[int, torch.Tensor]: Conditional probabilities of each word for each class.
         """
         # TODO: Estimate conditional probabilities for the words in features and apply smoothing
-        class_word_counts: Dict[int, torch.Tensor] = None
+        class_word_counts: Dict[int, torch.Tensor] = {}
+        classes: torch.Tensor = labels.unique() 
+
+        for label in classes:
+            class_features : torch.Tensor = features[labels == label]  
+            word_counts : torch.Tensor = class_features.sum(dim=0)
+
+            smoothed_counts : torch.Tensor = word_counts + delta
+            total_words : torch.Tensor = smoothed_counts.sum()
+
+            class_word_counts[int(label)] = smoothed_counts / total_words
 
         return class_word_counts
 
@@ -80,12 +94,17 @@ class NaiveBayes:
         Returns:
             torch.Tensor: Log posterior probabilities for each class.
         """
+        
         if self.conditional_probabilities is None or self.class_priors is None:
-            raise ValueError(
-                "Model must be trained before estimating class posteriors."
-            )
-        # TODO: Calculate posterior based on priors and conditional probabilities of the words
-        log_posteriors: torch.Tensor = None
+            raise ValueError("Model must be trained before estimating class posteriors.")
+
+        log_posteriors = torch.zeros(len(self.class_priors))
+
+        for label in sorted(self.class_priors.keys()):
+            log_prior = torch.log(self.class_priors[label])
+            log_cond_prob = torch.sum(feature * torch.log(self.conditional_probabilities[label]))
+            log_posteriors[label] = log_prior + log_cond_prob
+
         return log_posteriors
 
     def predict(self, feature: torch.Tensor) -> int:
@@ -105,7 +124,7 @@ class NaiveBayes:
             raise Exception("Model not trained. Please call the train method first.")
         
         # TODO: Calculate log posteriors and obtain the class of maximum likelihood 
-        pred: int = None
+        pred: int = int(torch.argmax(self.estimate_class_posteriors(feature)))
         return pred
 
     def predict_proba(self, feature: torch.Tensor) -> torch.Tensor:
@@ -125,5 +144,5 @@ class NaiveBayes:
             raise Exception("Model not trained. Please call the train method first.")
 
         # TODO: Calculate log posteriors and transform them to probabilities (softmax)
-        probs: torch.Tensor = None
+        probs: torch.Tensor = torch.softmax(self.estimate_class_posteriors(feature), dim=0)
         return probs
