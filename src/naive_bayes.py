@@ -122,9 +122,9 @@ class NaiveBayes:
         """
         if not self.class_priors or not self.conditional_probabilities:
             raise Exception("Model not trained. Please call the train method first.")
-        
+        probs = self.predict_proba(feature)
         # TODO: Calculate log posteriors and obtain the class of maximum likelihood 
-        pred: int = int(torch.argmax(self.estimate_class_posteriors(feature)))
+        pred: int = int(torch.argmax(probs))
         return pred
 
     def predict_proba(self, feature: torch.Tensor) -> torch.Tensor:
